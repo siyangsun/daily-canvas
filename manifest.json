@@ -1,0 +1,11 @@
+{
+  "id": "daily-canvas",
+  "name": "Daily Canvas",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Open or create a daily canvas file, similar to the Daily Notes core plugin.",
+  "author": "siyangsun",
+  "authorUrl": "https://github.com/siyangsun",
+  "fundingUrl": "",
+  "isDesktopOnly": false
+}
