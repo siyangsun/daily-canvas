@@ -1,19 +1,23 @@
 import { App, moment, PluginSettingTab, Setting } from "obsidian";
 import type DailyCanvasPlugin from "./main";
 
-export interface DailyCanvasSettings {
+export interface PeriodSettings {
   dateFormat: string;
   folder: string;
   templatePath: string;
+}
+
+export interface DailyCanvasSettings {
+  daily: PeriodSettings;
+  weekly: PeriodSettings;
   openInNewTab: boolean;
   showStatusBar: boolean;
   autoOpenOnStartup: boolean;
 }
 
 export const DEFAULT_SETTINGS: DailyCanvasSettings = {
-  dateFormat: "YYYY-MM-DD",
-  folder: "",
-  templatePath: "",
+  daily: { dateFormat: "YYYY-MM-DD", folder: "", templatePath: "" },
+  weekly: { dateFormat: "YYYY-[W]WW", folder: "", templatePath: "" },
   openInNewTab: false,
   showStatusBar: true,
   autoOpenOnStartup: false,
@@ -31,55 +35,14 @@ export class DailyCanvasSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    const dateFormatSetting = new Setting(containerEl)
-      .setName("Date format")
-      .setDesc("Moment.js format for the canvas filename (e.g. YYYY-MM-DD).")
-      .addText((text) =>
-        text
-          .setPlaceholder("YYYY-MM-DD")
-          .setValue(this.plugin.settings.dateFormat)
-          .onChange(async (value) => {
-            this.plugin.settings.dateFormat = value || "YYYY-MM-DD";
-            await this.plugin.saveSettings();
-            updatePreview(value || "YYYY-MM-DD");
-          })
-      );
+    this.addPeriodSettings(containerEl, "daily", "Daily canvas");
+    this.addPeriodSettings(containerEl, "weekly", "Weekly canvas");
 
-    const previewEl = dateFormatSetting.descEl.createDiv({ cls: "daily-canvas-format-preview" });
-    const updatePreview = (format: string) => {
-      previewEl.setText(`Preview: ${moment().format(format)}.canvas`);
-    };
-    updatePreview(this.plugin.settings.dateFormat);
-
-    new Setting(containerEl)
-      .setName("Folder")
-      .setDesc("Vault folder to store daily canvas files. Leave blank for vault root.")
-      .addText((text) =>
-        text
-          .setPlaceholder("e.g. Canvases/Daily")
-          .setValue(this.plugin.settings.folder)
-          .onChange(async (value) => {
-            this.plugin.settings.folder = value.trim();
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Template file")
-      .setDesc("Path to a .canvas file to use as a template when creating a new daily canvas.")
-      .addText((text) =>
-        text
-          .setPlaceholder("e.g. Templates/daily-canvas.canvas")
-          .setValue(this.plugin.settings.templatePath)
-          .onChange(async (value) => {
-            this.plugin.settings.templatePath = value.trim();
-            await this.plugin.saveSettings();
-          })
-      );
+    new Setting(containerEl).setName("General").setHeading();
 
     new Setting(containerEl)
       .setName("Open in new tab")
-      .setDesc("Always open the daily canvas in a new tab instead of the current one.")
+      .setDesc("Always open canvases in a new tab instead of the current one.")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.openInNewTab)
@@ -110,6 +73,67 @@ export class DailyCanvasSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.autoOpenOnStartup)
           .onChange(async (value) => {
             this.plugin.settings.autoOpenOnStartup = value;
+            await this.plugin.saveSettings();
+          })
+      );
+  }
+
+  private addPeriodSettings(
+    containerEl: HTMLElement,
+    period: "daily" | "weekly",
+    label: string
+  ) {
+    new Setting(containerEl).setName(label).setHeading();
+
+    const periodSettings = this.plugin.settings[period];
+    const defaultFormat = period === "daily" ? "YYYY-MM-DD" : "YYYY-[W]WW";
+    const folderPlaceholder = period === "daily" ? "e.g. Canvases/Daily" : "e.g. Canvases/Weekly";
+    const templatePlaceholder =
+      period === "daily" ? "e.g. Templates/daily.canvas" : "e.g. Templates/weekly.canvas";
+
+    const dateFormatSetting = new Setting(containerEl)
+      .setName("Date format")
+      .setDesc(`Moment.js format for the ${label.toLowerCase()} canvas filename.`)
+      .addText((text) =>
+        text
+          .setPlaceholder(defaultFormat)
+          .setValue(periodSettings.dateFormat)
+          .onChange(async (value) => {
+            this.plugin.settings[period].dateFormat = value || defaultFormat;
+            await this.plugin.saveSettings();
+            if (period === "daily") this.plugin.refreshStatusBar();
+            updatePreview(value || defaultFormat);
+          })
+      );
+
+    const previewEl = dateFormatSetting.descEl.createDiv({ cls: "daily-canvas-format-preview" });
+    const updatePreview = (format: string) => {
+      previewEl.setText(`Preview: ${moment().format(format)}.canvas`);
+    };
+    updatePreview(periodSettings.dateFormat);
+
+    new Setting(containerEl)
+      .setName("Folder")
+      .setDesc("Vault folder to store canvases. Leave blank for vault root.")
+      .addText((text) =>
+        text
+          .setPlaceholder(folderPlaceholder)
+          .setValue(periodSettings.folder)
+          .onChange(async (value) => {
+            this.plugin.settings[period].folder = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Template file")
+      .setDesc("Path to a .canvas file to use as a template for new canvases.")
+      .addText((text) =>
+        text
+          .setPlaceholder(templatePlaceholder)
+          .setValue(periodSettings.templatePath)
+          .onChange(async (value) => {
+            this.plugin.settings[period].templatePath = value.trim();
             await this.plugin.saveSettings();
           })
       );

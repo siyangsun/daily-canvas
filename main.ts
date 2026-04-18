@@ -5,6 +5,8 @@ import {
   DEFAULT_SETTINGS,
 } from "./settings";
 
+type Period = "daily" | "weekly";
+
 export default class DailyCanvasPlugin extends Plugin {
   settings: DailyCanvasSettings;
   private statusBarItem: HTMLElement | null = null;
@@ -14,20 +16,30 @@ export default class DailyCanvasPlugin extends Plugin {
     await this.loadSettings();
 
     this.addRibbonIcon("blocks", "Open daily canvas", () =>
-      this.openOrCreateDailyCanvas()
+      this.openOrCreate("daily")
+    );
+
+    this.addRibbonIcon("calendar-range", "Open weekly canvas", () =>
+      this.openOrCreate("weekly")
     );
 
     this.addCommand({
       id: "open-today",
       name: "Open today's canvas",
-      callback: () => this.openOrCreateDailyCanvas(),
+      callback: () => this.openOrCreate("daily"),
+    });
+
+    this.addCommand({
+      id: "open-this-week",
+      name: "Open this week's canvas",
+      callback: () => this.openOrCreate("weekly"),
     });
 
     this.addSettingTab(new DailyCanvasSettingTab(this.app, this));
     this.refreshStatusBar();
 
     if (this.settings.autoOpenOnStartup) {
-      this.app.workspace.onLayoutReady(() => this.openOrCreateDailyCanvas());
+      this.app.workspace.onLayoutReady(() => this.openOrCreate("daily"));
     }
   }
 
@@ -35,8 +47,8 @@ export default class DailyCanvasPlugin extends Plugin {
     this.refreshStatusBar();
   }
 
-  todayFilePath(): string {
-    const { dateFormat, folder } = this.settings;
+  filePath(period: Period): string {
+    const { dateFormat, folder } = this.settings[period];
     const filename = moment().format(dateFormat) + ".canvas";
     return normalizePath(folder ? `${folder}/${filename}` : filename);
   }
@@ -55,16 +67,16 @@ export default class DailyCanvasPlugin extends Plugin {
 
     this.statusBarItem = this.addStatusBarItem();
     const update = () => {
-      this.statusBarItem?.setText(moment().format(this.settings.dateFormat));
+      this.statusBarItem?.setText(moment().format(this.settings.daily.dateFormat));
     };
     update();
     this.statusBarInterval = window.setInterval(update, 60_000);
   }
 
-  async openOrCreateDailyCanvas() {
+  async openOrCreate(period: Period) {
     const { vault, workspace } = this.app;
-    const { folder, templatePath } = this.settings;
-    const filePath = this.todayFilePath();
+    const { folder, templatePath } = this.settings[period];
+    const filePath = this.filePath(period);
 
     let file = vault.getAbstractFileByPath(filePath);
 
@@ -93,7 +105,31 @@ export default class DailyCanvasPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const saved = await this.loadData();
+
+    // Migrate from v1 flat settings
+    if (saved && !saved.daily && "dateFormat" in saved) {
+      this.settings = {
+        ...DEFAULT_SETTINGS,
+        daily: {
+          dateFormat: saved.dateFormat ?? DEFAULT_SETTINGS.daily.dateFormat,
+          folder: saved.folder ?? DEFAULT_SETTINGS.daily.folder,
+          templatePath: saved.templatePath ?? DEFAULT_SETTINGS.daily.templatePath,
+        },
+        openInNewTab: saved.openInNewTab ?? DEFAULT_SETTINGS.openInNewTab,
+        showStatusBar: saved.showStatusBar ?? DEFAULT_SETTINGS.showStatusBar,
+        autoOpenOnStartup: saved.autoOpenOnStartup ?? DEFAULT_SETTINGS.autoOpenOnStartup,
+      };
+      await this.saveSettings();
+      return;
+    }
+
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...saved,
+      daily: { ...DEFAULT_SETTINGS.daily, ...(saved?.daily ?? {}) },
+      weekly: { ...DEFAULT_SETTINGS.weekly, ...(saved?.weekly ?? {}) },
+    };
   }
 
   async saveSettings() {
