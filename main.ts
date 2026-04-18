@@ -18,7 +18,7 @@ export default class DailyCanvasPlugin extends Plugin {
     );
 
     this.addCommand({
-      id: "open-daily-canvas",
+      id: "open-today",
       name: "Open today's canvas",
       callback: () => this.openOrCreateDailyCanvas(),
     });
